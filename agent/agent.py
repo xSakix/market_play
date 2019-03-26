@@ -26,7 +26,11 @@ class Policy(nn.Module):
 class Agent:
     def __init__(self, gamma=0.99):
         self.log_interval = 10
-        self.policy = Policy()
+        try:
+            self.policy = torch.load('market_agent.pt')
+        except:
+            self.policy = Policy()
+
         self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-2)
         self.eps = np.finfo(np.float32).eps.item()
         self.gamma = gamma
@@ -77,3 +81,4 @@ class Agent:
             # if i_episode % self.log_interval == 0:
             print('Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
                 i_episode, ep_reward, running_reward))
+            torch.save(self.policy, 'market_agent.pt')
