@@ -5,6 +5,7 @@ from torch import optim
 import numpy as np
 from torch.distributions import Categorical
 from itertools import count
+from market_env.market_env import MarketEnv
 
 
 class Policy(nn.Module):
@@ -57,23 +58,22 @@ class Agent:
         del self.policy.saved_log_probs[:]
 
     def train(self):
+        print('Starting...')
         running_reward = 10
         for i_episode in count(1):
-            state, ep_reward = env.reset(), 0
+            print('Starting episode {}'.format(i_episode))
+            self.env = MarketEnv()
+            state, ep_reward = self.env.reset(), 0
             for t in range(1, 10000):  # Don't infinite loop while learning
                 action = self.select_action(state)
-                state, reward, done, _ = env.step(action)
+                state, reward = self.env.step(action, state)
                 self.policy.rewards.append(reward)
                 ep_reward += reward
-                if done:
-                    break
+                if t % 1000 == 0:
+                    print('{}->{} iteration'.format(i_episode, t))
 
             running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
             self.finish_episode()
-            if i_episode % self.log_interval == 0:
-                print('Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
-                    i_episode, ep_reward, running_reward))
-            if running_reward > env.spec.reward_threshold:
-                print("Solved! Running reward is now {} and "
-                      "the last episode runs to {} time steps!".format(running_reward, t))
-                break
+            # if i_episode % self.log_interval == 0:
+            print('Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
+                i_episode, ep_reward, running_reward))

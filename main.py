@@ -2,23 +2,13 @@ import scipy
 import numpy as np
 from generator import generator
 import matplotlib.pyplot as plt
+from agent.agent import Agent
+from market_env.market_env import Actions
 
 
 def main():
-    # [plt.plot(gen_samples()) for _ in range(3)]
-    # plt.show()
-    s = gen_samples()
-    window = 5
-
-    print(sliding_window(s, window))
-
-
-def gen_samples():
-    g = generator.BrownianGenerator(100)
-    samples = g.generate()
-    return samples
-
-
+    agent = Agent()
+    agent.train()
 
 
 if __name__ == "__main__":
