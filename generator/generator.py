@@ -10,8 +10,8 @@ class Generator:
 
 
 class BrownianGenerator(Generator):
-    def __init__(self, sample_size):
-        self.x0 = 0.
+    def __init__(self, sample_size, x0=0.):
+        self.x0 = x0
         self.n = sample_size
         self.dt = np.random.uniform(0., 2.)
         self.delta = np.random.uniform(0., 1.)

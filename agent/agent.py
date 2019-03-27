@@ -24,19 +24,27 @@ class Policy(nn.Module):
 
 
 class Agent:
-    def __init__(self, gamma=0.99):
+    def __init__(self, gamma=0.99, load_existing=True):
         self.log_interval = 10
-        try:
-            self.policy = torch.load('market_agent.pt')
-        except:
+        if load_existing:
+            self._load_existing()
+        else:
             self.policy = Policy()
 
         self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-2)
         self.eps = np.finfo(np.float32).eps.item()
         self.gamma = gamma
 
-    def select_action(self, state):
+    def _load_existing(self):
+        try:
+            self.policy = torch.load('market_agent.pt')
+        except:
+            self.policy = Policy()
+
+    def select_action(self, state, evaluate=False):
         state = torch.from_numpy(state).float().unsqueeze(0)
+        if evaluate:
+            self.policy.eval()
         probs = self.policy(state)
         m = Categorical(probs)
         action = m.sample()
@@ -64,7 +72,8 @@ class Agent:
     def train(self):
         print('Starting...')
         running_reward = 10
-        for i_episode in count(1):
+        # for i_episode in count(1):
+        for i_episode in range(10):
             print('Starting episode {}'.format(i_episode))
             self.env = MarketEnv()
             state, ep_reward = self.env.reset(), 0
