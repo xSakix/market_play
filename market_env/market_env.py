@@ -53,3 +53,6 @@ class MarketEnv:
             new_state = self.queue.popleft()
 
         return new_state, reward
+
+    def __len__(self):
+        return len(self.states)

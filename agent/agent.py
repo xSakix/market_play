@@ -24,7 +24,7 @@ class Policy(nn.Module):
 
 
 class Agent:
-    def __init__(self, gamma=0.99, load_existing=True):
+    def __init__(self, gamma=0.99, load_existing=True, patience = 2):
         self.log_interval = 10
         if load_existing:
             self._load_existing()
@@ -34,6 +34,7 @@ class Agent:
         self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-2)
         self.eps = np.finfo(np.float32).eps.item()
         self.gamma = gamma
+        self.patience = 2
 
     def _load_existing(self):
         try:
@@ -73,21 +74,37 @@ class Agent:
         print('Starting...')
         running_reward = 10
         # for i_episode in count(1):
-        for i_episode in range(10):
+        self.env = MarketEnv()
+        not_improved = 0
+        rewards = []
+        for i_episode in range(100):
             print('Starting episode {}'.format(i_episode))
-            self.env = MarketEnv()
+            if not_improved == 2:
+                self.env = MarketEnv()
+                not_improved = 0
+                del rewards[:]
+
             state, ep_reward = self.env.reset(), 0
-            for t in range(1, 10000):  # Don't infinite loop while learning
-                action = self.select_action(state)
-                state, reward = self.env.step(action, state)
-                self.policy.rewards.append(reward)
-                ep_reward += reward
-                if t % 1000 == 0:
-                    print('{}->{} iteration'.format(i_episode, t))
+
+            ep_reward = self.run_episode(ep_reward, state)
 
             running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
+            rewards.append(running_reward)
+
+            if len(rewards) > 1 and rewards[-1] - rewards[-2] < 1e-3:
+                not_improved += 1
+            elif not_improved > 1:
+                not_improved -= 1
+
             self.finish_episode()
-            # if i_episode % self.log_interval == 0:
             print('Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
                 i_episode, ep_reward, running_reward))
             torch.save(self.policy, 'market_agent.pt')
+
+    def run_episode(self, ep_reward, state):
+        for t in range(1, len(self.env)):  # Don't infinite loop while learning
+            action = self.select_action(state)
+            state, reward = self.env.step(action, state)
+            self.policy.rewards.append(reward)
+            ep_reward += reward
+        return ep_reward
