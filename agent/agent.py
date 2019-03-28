@@ -11,7 +11,6 @@ from market_env.market_env import MarketEnv
 class Policy(nn.Module):
     def __init__(self):
         super(Policy, self).__init__()
-        self.norm1 = nn.LayerNorm(30)
         self.affine1 = nn.Linear(30, 512)
         self.affine2 = nn.Linear(512, 3)
 
@@ -19,7 +18,8 @@ class Policy(nn.Module):
         self.rewards = []
 
     def forward(self, x):
-        x = F.relu(self.affine1(self.norm1(x)))
+        x = F.normalize(x)
+        x = F.relu(self.affine1(x))
         action_scores = self.affine2(x)
         return F.softmax(action_scores, dim=1)
 
@@ -76,7 +76,7 @@ class Agent:
         running_reward = 10
         self.env = MarketEnv()
         # for i_episode in count(1):
-        for i_episode in range(1,episodes):
+        for i_episode in range(1, episodes):
 
             print('Starting episode {}'.format(i_episode))
 
