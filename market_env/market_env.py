@@ -15,7 +15,7 @@ class Actions(Enum):
 class MarketEnv:
 
     def __init__(self):
-        self.samples = BrownianGenerator(1000).generate()
+        self.samples = BrownianGenerator(1000000).generate()
 
         # self.samples = MinMaxTransform().transform(data)
         self.states = SlidingWindow(30).transform(self.samples)

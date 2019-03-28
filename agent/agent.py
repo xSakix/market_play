@@ -11,17 +11,30 @@ from market_env.market_env import MarketEnv
 class Policy(nn.Module):
     def __init__(self):
         super(Policy, self).__init__()
-        self.affine1 = nn.Linear(30, 512)
+        # long term memory
+        self.lstm = nn.LSTM(30, 30, bidirectional=True)
+        # short term
+        self.gru = nn.GRU(30, 30, bidirectional=True)
+
+        self.affine1 = nn.Linear(120, 512)
         self.affine2 = nn.Linear(512, 3)
 
         self.saved_log_probs = []
         self.rewards = []
 
     def forward(self, x):
+        h_lstm = (torch.zeros(2, 1, 30), torch.zeros(2, 1, 30))
+        h_gru = torch.zeros(2, 1, 30)
+
         x = F.normalize(x)
-        x = F.relu(self.affine1(x))
-        action_scores = self.affine2(x)
-        return F.softmax(action_scores, dim=1)
+
+        out_lstm, h_lstm = self.lstm(x.view(1, 1, -1), h_lstm)
+        out_gru, h_gru = self.gru(x.view(1, 1, -1), h_gru)
+
+        out = torch.cat((out_lstm, out_gru), dim=-1).squeeze(1)
+
+        x = F.relu(self.affine1(F.relu(out)))
+        return F.softmax(self.affine2(x), dim=1)
 
 
 class Agent:
@@ -76,7 +89,7 @@ class Agent:
         running_reward = 10
         self.env = MarketEnv()
         # for i_episode in count(1):
-        for i_episode in range(1, episodes):
+        for i_episode in range(1, episodes + 1):
 
             print('Starting episode {}'.format(i_episode))
 

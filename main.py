@@ -16,7 +16,7 @@ def main():
     data = df['BTC-EUR'].values
 
     agent = Agent(load_existing=False)
-    agent.train()
+    agent.train(epochs=10, episodes=1)
 
     evaluator = MarketAgentEvaluator(agent)
     evaluator.evaluate(data)
