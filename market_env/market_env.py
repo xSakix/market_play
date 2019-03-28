@@ -1,5 +1,7 @@
-from generator import generator
-from transformer.transformer import SlidingWindow
+from sklearn.preprocessing import MinMaxScaler
+
+from generator.generator import BrownianGenerator
+from transformer.transformer import SlidingWindow, MinMaxTransform
 from collections import deque
 from enum import Enum
 
@@ -13,11 +15,14 @@ class Actions(Enum):
 class MarketEnv:
 
     def __init__(self):
-        self.samples = generator.BrownianGenerator(1000).generate()
+        self.samples = BrownianGenerator(1000).generate()
+
+        # self.samples = MinMaxTransform().transform(data)
         self.states = SlidingWindow(30).transform(self.samples)
         self.queue = deque(self.states)
         self.shares = 0
         self.cash = 100000.
+        self.investment = self.cash
 
     def reset(self):
         self.shares = 0
@@ -28,9 +33,13 @@ class MarketEnv:
     def step(self, action, state):
         # 0 - Hold, 1 - Buy, 2-Sell
         price = state[-1]
-        last_price = state[-2]
 
-        last_portfolio_value = last_price * self.shares + self.cash
+        if len(self.queue) == 0:
+            reward_price = price
+            new_state = self.reset()
+        else:
+            new_state = self.queue.popleft()
+            reward_price = state[0]
 
         if action == Actions.SELL.value and self.shares > 0:
             self.cash = self.shares * price
@@ -44,13 +53,8 @@ class MarketEnv:
         if action == Actions.HOLD.value:
             pass
 
-        current_portfolio_value = price * self.shares + self.cash
-        reward = (current_portfolio_value / last_portfolio_value) - 1.
-
-        if len(self.queue) == 0:
-            new_state = self.reset()
-        else:
-            new_state = self.queue.popleft()
+        portfolio_value = reward_price * self.shares + self.cash
+        reward = (portfolio_value / self.investment) - 1.
 
         return new_state, reward
 

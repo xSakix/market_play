@@ -11,6 +11,7 @@ from market_env.market_env import MarketEnv
 class Policy(nn.Module):
     def __init__(self):
         super(Policy, self).__init__()
+        self.norm1 = nn.LayerNorm(30)
         self.affine1 = nn.Linear(30, 512)
         self.affine2 = nn.Linear(512, 3)
 
@@ -18,13 +19,13 @@ class Policy(nn.Module):
         self.rewards = []
 
     def forward(self, x):
-        x = F.relu(self.affine1(x))
+        x = F.relu(self.affine1(self.norm1(x)))
         action_scores = self.affine2(x)
         return F.softmax(action_scores, dim=1)
 
 
 class Agent:
-    def __init__(self, gamma=0.99, load_existing=True, patience = 2):
+    def __init__(self, gamma=0.99, load_existing=True, patience=2):
         self.log_interval = 10
         if load_existing:
             self._load_existing()
@@ -70,35 +71,28 @@ class Agent:
         del self.policy.rewards[:]
         del self.policy.saved_log_probs[:]
 
-    def train(self):
+    def train(self, episodes=10, epochs=15):
         print('Starting...')
         running_reward = 10
-        # for i_episode in count(1):
         self.env = MarketEnv()
-        not_improved = 0
-        rewards = []
-        for i_episode in range(100):
+        # for i_episode in count(1):
+        for i_episode in range(1,episodes):
+
             print('Starting episode {}'.format(i_episode))
-            if not_improved == 2:
-                self.env = MarketEnv()
-                not_improved = 0
-                del rewards[:]
 
-            state, ep_reward = self.env.reset(), 0
+            for epoch in range(epochs):
+                state, ep_reward = self.env.reset(), 0
 
-            ep_reward = self.run_episode(ep_reward, state)
+                ep_reward = self.run_episode(ep_reward, state)
 
-            running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
-            rewards.append(running_reward)
+                running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
+                print('Episode {}:{}/{}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
+                    i_episode, epoch, epochs, ep_reward, running_reward))
+                self.finish_episode()
 
-            if len(rewards) > 1 and rewards[-1] - rewards[-2] < 1e-3:
-                not_improved += 1
-            elif not_improved > 1:
-                not_improved -= 1
+            print('Switching environment...')
+            self.env = MarketEnv()
 
-            self.finish_episode()
-            print('Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
-                i_episode, ep_reward, running_reward))
             torch.save(self.policy, 'market_agent.pt')
 
     def run_episode(self, ep_reward, state):

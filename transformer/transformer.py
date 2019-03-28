@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler
 
 
 class Transform:
@@ -86,3 +87,11 @@ def _sliding_window(data, size, stepsize=1, padded=False, axis=-1, copy=True):
         return strided.copy()
     else:
         return strided
+
+
+class MinMaxTransform(Transform):
+
+    def transform(self, data):
+        scaler = MinMaxScaler()
+        data = scaler.fit_transform(data.reshape(-1, 1))
+        return data.reshape(-1)
