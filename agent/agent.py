@@ -9,22 +9,23 @@ from market_env.market_env import MarketEnv
 
 
 class Policy(nn.Module):
-    def __init__(self):
+    def __init__(self,window=30):
         super(Policy, self).__init__()
+        self.hidden_size = window
         # long term memory
-        self.lstm = nn.LSTM(30, 30, bidirectional=True)
+        self.lstm = nn.LSTM(self.hidden_size, window)
         # short term
-        self.gru = nn.GRU(30, 30, bidirectional=True)
+        self.gru = nn.GRU(self.hidden_size, window)
 
-        self.affine1 = nn.Linear(120, 512)
+        self.affine1 = nn.Linear(2*self.hidden_size, 512)
         self.affine2 = nn.Linear(512, 3)
 
         self.saved_log_probs = []
         self.rewards = []
 
     def forward(self, x):
-        h_lstm = (torch.zeros(2, 1, 30), torch.zeros(2, 1, 30))
-        h_gru = torch.zeros(2, 1, 30)
+        h_lstm = (torch.zeros(1, 1, self.hidden_size), torch.zeros(1, 1, self.hidden_size))
+        h_gru = torch.zeros(1, 1, self.hidden_size)
 
         x = F.normalize(x)
 
@@ -38,17 +39,17 @@ class Policy(nn.Module):
 
 
 class Agent:
-    def __init__(self, gamma=0.99, load_existing=True, patience=2):
+    def __init__(self, gamma=0.99, load_existing=True, window=30):
         self.log_interval = 10
         if load_existing:
             self._load_existing()
         else:
-            self.policy = Policy()
+            self.policy = Policy(window)
 
         self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-2)
         self.eps = np.finfo(np.float32).eps.item()
         self.gamma = gamma
-        self.patience = 2
+        self.window = window
 
     def _load_existing(self):
         try:
@@ -84,10 +85,10 @@ class Agent:
         del self.policy.rewards[:]
         del self.policy.saved_log_probs[:]
 
-    def train(self, episodes=10, epochs=15):
+    def train(self, episodes=10, epochs=15,num_samples=1000):
         print('Starting...')
         running_reward = 10
-        self.env = MarketEnv()
+        self.env = MarketEnv(num_samples,self.window)
         # for i_episode in count(1):
         for i_episode in range(1, episodes + 1):
 
@@ -104,8 +105,8 @@ class Agent:
                 self.finish_episode()
 
             print('Switching environment...')
-            self.env = MarketEnv()
-
+            self.env = MarketEnv(num_samples,self.window)
+            running_reward = 10
             torch.save(self.policy, 'market_agent.pt')
 
     def run_episode(self, ep_reward, state):

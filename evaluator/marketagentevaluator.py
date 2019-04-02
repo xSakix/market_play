@@ -15,8 +15,8 @@ class MarketAgentEvaluator:
         self.cash = 100000.
         self.portfolio = []
 
-    def evaluate(self, data):
-        states = SlidingWindow(30).transform(data)
+    def evaluate(self, data, window=30):
+        states = SlidingWindow(window).transform(data)
         for state in states:
             action = self.agent.select_action(state, True)
             self._apply_action(action, state)

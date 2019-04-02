@@ -14,11 +14,11 @@ class Actions(Enum):
 
 class MarketEnv:
 
-    def __init__(self):
-        self.samples = BrownianGenerator(1000000).generate()
+    def __init__(self,num_samples=1000,window=30):
+        self.samples = BrownianGenerator(num_samples).generate()
 
         # self.samples = MinMaxTransform().transform(data)
-        self.states = SlidingWindow(30).transform(self.samples)
+        self.states = SlidingWindow(window).transform(self.samples)
         self.queue = deque(self.states)
         self.shares = 0
         self.cash = 100000.
