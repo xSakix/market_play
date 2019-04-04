@@ -12,14 +12,16 @@ import pandas as pd
 
 def main():
     df = pd.read_csv('evaluator/btc_etf_data_adj_close.csv')
-    df = df[df.date > '2017-10-01']
+    df = df[df.date > '2017-06-01']
     data = df['BTC-EUR'].values
-    window=360
-    agent = Agent(load_existing=False,window=window)
-    agent.train(epochs=5, episodes=5,num_samples=1080)
+    window = 28
+    agent = Agent(load_existing=False, window=window)
+    agent.train(epochs=10, episodes=10, num_samples=27000)
+    agent.plot_results()
 
+    # Agent(load_existing=True, window=window)
     evaluator = MarketAgentEvaluator(agent)
-    evaluator.evaluate(data,window=window)
+    evaluator.evaluate(data, window=window)
     evaluator.plot()
     evaluator.print()
 

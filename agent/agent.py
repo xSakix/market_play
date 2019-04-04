@@ -9,7 +9,7 @@ from market_env.market_env import MarketEnv
 
 
 class Policy(nn.Module):
-    def __init__(self,window=30):
+    def __init__(self, window=30):
         super(Policy, self).__init__()
         self.hidden_size = window
         # long term memory
@@ -17,7 +17,7 @@ class Policy(nn.Module):
         # short term
         self.gru = nn.GRU(self.hidden_size, window)
 
-        self.affine1 = nn.Linear(2*self.hidden_size, 512)
+        self.affine1 = nn.Linear(2 * self.hidden_size, 512)
         self.affine2 = nn.Linear(512, 3)
 
         self.saved_log_probs = []
@@ -50,6 +50,7 @@ class Agent:
         self.eps = np.finfo(np.float32).eps.item()
         self.gamma = gamma
         self.window = window
+        self.rewards = []
 
     def _load_existing(self):
         try:
@@ -85,13 +86,14 @@ class Agent:
         del self.policy.rewards[:]
         del self.policy.saved_log_probs[:]
 
-    def train(self, episodes=10, epochs=15,num_samples=1000):
+    def train(self, episodes=10, epochs=15, num_samples=1000):
         print('Starting...')
-        running_reward = 10
-        self.env = MarketEnv(num_samples,self.window)
         # for i_episode in count(1):
         for i_episode in range(1, episodes + 1):
-
+            running_reward = 0.
+            self.env = MarketEnv(num_samples, self.window)
+            # self.env.plot()
+            ep_rewards = []
             print('Starting episode {}'.format(i_episode))
 
             for epoch in range(epochs):
@@ -102,11 +104,9 @@ class Agent:
                 running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
                 print('Episode {}:{}/{}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
                     i_episode, epoch, epochs, ep_reward, running_reward))
+                ep_rewards.append(running_reward)
                 self.finish_episode()
-
-            print('Switching environment...')
-            self.env = MarketEnv(num_samples,self.window)
-            running_reward = 10
+            self.rewards.append(ep_rewards)
             torch.save(self.policy, 'market_agent.pt')
 
     def run_episode(self, ep_reward, state):
@@ -116,3 +116,11 @@ class Agent:
             self.policy.rewards.append(reward)
             ep_reward += reward
         return ep_reward
+
+    def plot_results(self):
+        import matplotlib.pyplot as plt
+        print(self.rewards)
+        for reward in self.rewards:
+            plt.plot(reward)
+        plt.title('rewards')
+        plt.show()

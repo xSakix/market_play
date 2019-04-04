@@ -4,6 +4,7 @@ from generator.generator import BrownianGenerator
 from transformer.transformer import SlidingWindow, MinMaxTransform
 from collections import deque
 from enum import Enum
+import numpy as np
 
 
 class Actions(Enum):
@@ -14,7 +15,7 @@ class Actions(Enum):
 
 class MarketEnv:
 
-    def __init__(self,num_samples=1000,window=30):
+    def __init__(self, num_samples=1000, window=30):
         self.samples = BrownianGenerator(num_samples).generate()
 
         # self.samples = MinMaxTransform().transform(data)
@@ -35,11 +36,19 @@ class MarketEnv:
         price = state[-1]
 
         if len(self.queue) == 0:
-            reward_price = price
-            new_state = self.reset()
+            raise Exception("Expected states in queue, but none are left!")
         else:
             new_state = self.queue.popleft()
-            reward_price = state[0]
+            # for a data array of prices with window length
+            # Agents buy for last price known
+            # But the evaluation needs to be on the next price, which shows
+            # how good the decision was...
+            # Remark: maybe a better solution for reward would be
+            # to compute returns for all prices afterwards
+            # and avg the reward?
+            # Remark 2: maybe only for the window?
+            # reward_price = new_state[0]
+            price_window = new_state
 
         if action == Actions.SELL.value and self.shares > 0:
             self.cash = self.shares * price
@@ -53,10 +62,18 @@ class MarketEnv:
         if action == Actions.HOLD.value:
             pass
 
-        portfolio_value = reward_price * self.shares + self.cash
-        reward = (portfolio_value / self.investment) - 1.
+        portfolio_value = price_window * self.shares + self.cash
+        returns = (portfolio_value / self.investment) - np.ones(len(price_window))
+        running_reward = 0.
+        for r in returns:
+            running_reward = 0.05 * r + (1 - 0.05) * running_reward
 
-        return new_state, reward
+        return new_state, running_reward
 
     def __len__(self):
-        return len(self.states)
+        return len(self.states)-1
+
+    def plot(self):
+        import matplotlib.pyplot as plt
+        plt.plot(self.samples)
+        plt.show()

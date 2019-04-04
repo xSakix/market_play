@@ -13,11 +13,11 @@ class SlidingWindow(Transform):
 
     def transform(self, data):
         assert len(data.shape) == 1
-        return _sliding_window(data, self.window)
+        return _sliding_window(data=data, size=self.window)
 
 
 # https://gist.github.com/nils-werner/9d321441006b112a4b116a8387c2280c
-def _sliding_window(data, size, stepsize=1, padded=False, axis=-1, copy=True):
+def _sliding_window(data, size, stepsize=1, axis=-1, copy=True):
     """
     Calculate a sliding window over a signal
     Parameters
