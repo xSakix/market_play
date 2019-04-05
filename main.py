@@ -16,7 +16,7 @@ def main():
     data = df['BTC-EUR'].values
     window = 28
     agent = Agent(load_existing=False, window=window)
-    agent.train(epochs=10, episodes=10, num_samples=27000)
+    agent.train(epochs=10, episodes=10, num_samples=54000)
     agent.plot_results()
 
     # Agent(load_existing=True, window=window)
