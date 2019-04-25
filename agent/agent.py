@@ -40,6 +40,7 @@ class Policy(nn.Module):
 
 class Agent:
     def __init__(self, gamma=0.99, load_existing=True, window=30):
+        self.PENALTY = -0.00001
         self.log_interval = 10
         if load_existing:
             self._load_existing()
@@ -100,6 +101,8 @@ class Agent:
                 state, ep_reward = self.env.reset(), 0
 
                 ep_reward = self.run_episode(ep_reward, state)
+                if ep_reward == 0.:
+                    ep_reward = self.PENALTY
 
                 running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
                 print('Episode {}:{}/{}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
