@@ -1,3 +1,5 @@
+from collections import Counter
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -5,18 +7,34 @@ from torch import optim
 import numpy as np
 from torch.distributions import Categorical
 from itertools import count
-from market_env.market_env import MarketEnv
+
+from torch.nn import init
+
+from market_env.market_env import MarketEnv, Actions
+
+
+# src: http://proceedings.mlr.press/v9/glorot10a/glorot10a.pdf
+def weights_init(m):
+    print('Following weights will be initialized as xavier uniform...')
+    for name, param in m.named_parameters():
+        if 'lstm' in name or 'gru' in name:
+            print(name)
+            if 'bias' in name:
+                init.constant_(param, 0)
+            else:
+                init.xavier_uniform_(param)
 
 
 class Policy(nn.Module):
     def __init__(self, window=30):
         super(Policy, self).__init__()
-        self.hidden_size = window
+        self.hidden_size = window-1
         # long term memory
-        self.lstm = nn.LSTM(self.hidden_size, window)
+        self.lstm = nn.LSTM(self.hidden_size, window-1)
         # short term
-        self.gru = nn.GRU(self.hidden_size, window)
+        self.gru = nn.GRU(self.hidden_size, window-1)
 
+        self.dropout = nn.Dropout(0.5)
         self.affine1 = nn.Linear(2 * self.hidden_size, 512)
         self.affine2 = nn.Linear(512, 3)
 
@@ -34,30 +52,27 @@ class Policy(nn.Module):
 
         out = torch.cat((out_lstm, out_gru), dim=-1).squeeze(1)
 
+        out = self.dropout(out)
+
         x = F.relu(self.affine1(F.relu(out)))
         return F.softmax(self.affine2(x), dim=1)
 
 
 class Agent:
-    def __init__(self, gamma=0.99, load_existing=True, window=30):
+    def __init__(self, gamma=0.99, load_existing=True, window=30, model_name='market_agent.pt'):
         self.PENALTY = -0.00001
         self.log_interval = 10
         if load_existing:
-            self._load_existing()
+            self.policy = torch.load(model_name)
         else:
             self.policy = Policy(window)
+            weights_init(self.policy)
 
-        self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-2)
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-4, betas=(0.8, 0.99), weight_decay=1e-3)
         self.eps = np.finfo(np.float32).eps.item()
         self.gamma = gamma
         self.window = window
         self.rewards = []
-
-    def _load_existing(self):
-        try:
-            self.policy = torch.load('market_agent.pt')
-        except:
-            self.policy = Policy()
 
     def select_action(self, state, evaluate=False):
         state = torch.from_numpy(state).float().unsqueeze(0)
@@ -72,53 +87,59 @@ class Agent:
     def finish_episode(self):
         R = 0
         policy_loss = []
-        returns = []
+        rewards = []
         for r in self.policy.rewards[::-1]:
             R = r + self.gamma * R
-            returns.insert(0, R)
-        returns = torch.tensor(returns)
-        returns = (returns - returns.mean()) / (returns.std() + self.eps)
-        for log_prob, R in zip(self.policy.saved_log_probs, returns):
+            rewards.insert(0, R)
+        rewards = torch.tensor(rewards)
+        rewards = (rewards - rewards.mean()) / (rewards.std() + self.eps)
+        print(rewards.mean().item(), ' +/- ', rewards.std().item())
+        for log_prob, R in zip(self.policy.saved_log_probs, rewards):
             policy_loss.append(-log_prob * R)
         self.optimizer.zero_grad()
         policy_loss = torch.cat(policy_loss).sum()
+        print('LOSS:', policy_loss.item())
         policy_loss.backward()
         self.optimizer.step()
         del self.policy.rewards[:]
         del self.policy.saved_log_probs[:]
 
-    def train(self, episodes=10, epochs=15, num_samples=1000):
+    def train(self, episodes=10, num_samples=1000):
         print('Starting...')
-        # for i_episode in count(1):
-        for i_episode in range(1, episodes + 1):
-            running_reward = 0.
-            self.env = MarketEnv(num_samples, self.window)
-            # self.env.plot()
-            ep_rewards = []
+        self.env = MarketEnv(num_samples, self.window)
+        for i_episode in range(episodes):
             print('Starting episode {}'.format(i_episode))
 
-            for epoch in range(epochs):
-                state, ep_reward = self.env.reset(), 0
+            state, prices, ep_reward = self.env.reset()
 
-                ep_reward = self.run_episode(ep_reward, state)
-                if ep_reward == 0.:
-                    ep_reward = self.PENALTY
+            ep_reward, state, prices = self.run_episode(ep_reward, state, prices)
+            self.rewards.append(ep_reward)
+            portfolio_value = prices[-1] * self.env.shares + self.env.cash
+            print(
+                'Episode {}\tLast reward: {:.6f}\tAverage reward: {:.6f}\tShares:{}\tCash:{:.2f}\tPortfolio:{:.2f}'.format(
+                    i_episode, ep_reward, np.mean(self.rewards), self.env.shares, self.env.cash, portfolio_value))
+            self.finish_episode()
 
-                running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
-                print('Episode {}:{}/{}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
-                    i_episode, epoch, epochs, ep_reward, running_reward))
-                ep_rewards.append(running_reward)
-                self.finish_episode()
-            self.rewards.append(ep_rewards)
             torch.save(self.policy, 'market_agent.pt')
 
-    def run_episode(self, ep_reward, state):
-        for t in range(1, len(self.env)):  # Don't infinite loop while learning
+    def run_episode(self, ep_reward, state, prices):
+        actions = []
+
+        for t in range(len(self.env)):  # Don't infinite loop while learning
             action = self.select_action(state)
-            state, reward = self.env.step(action, state)
+            state, prices, reward, action = self.env.step(action, state, prices)
+            actions.append(action)
             self.policy.rewards.append(reward)
+            # ep_reward[ep_reward == 0.] = self.PENALTY
+            if ep_reward == 0.:
+                ep_reward = self.PENALTY
             ep_reward += reward
-        return ep_reward
+
+        c = Counter(actions)
+        for k, v in c.items():
+            print(Actions(k), ':', v)
+
+        return ep_reward / len(self.env), state, prices
 
     def plot_results(self):
         import matplotlib.pyplot as plt
