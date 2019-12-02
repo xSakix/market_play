@@ -1,7 +1,4 @@
-from collections import deque
-
-import pandas as pd
-
+import numpy as np
 from market_env.market_env import Actions
 from transformer.transformer import SlidingWindow
 import matplotlib.pyplot as plt
@@ -16,13 +13,14 @@ class MarketAgentEvaluator:
         self.portfolio = []
 
     def evaluate(self, data, window=30):
-        states = SlidingWindow(window).transform(data)
-        for state in states:
+        prices = SlidingWindow(window).transform(data)
+        states = np.log(prices[:, 1::]) - np.log(prices[:, :-(window - 1)])
+        for price_window, state in zip(prices, states):
             action = self.agent.select_action(state, True)
-            self._apply_action(action, state)
+            self._apply_action(action, price_window)
 
-    def _apply_action(self, action, state):
-        price = state[-1]
+    def _apply_action(self, action, price_window):
+        price = price_window[-1]
         if action == Actions.SELL.value and self.shares > 0:
             self.cash = self.shares * price
             self.shares = 0
