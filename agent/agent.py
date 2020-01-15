@@ -7,9 +7,7 @@ from torch import optim
 import numpy as np
 from torch.distributions import Categorical
 from itertools import count
-
 from torch.nn import init
-
 from market_env.market_env import MarketEnv, Actions
 
 
@@ -28,11 +26,11 @@ def weights_init(m):
 class Policy(nn.Module):
     def __init__(self, window=30):
         super(Policy, self).__init__()
-        self.hidden_size = window-1
+        self.hidden_size = window - 1
         # long term memory
-        self.lstm = nn.LSTM(self.hidden_size, window-1)
+        self.lstm = nn.LSTM(self.hidden_size, window - 1)
         # short term
-        self.gru = nn.GRU(self.hidden_size, window-1)
+        self.gru = nn.GRU(self.hidden_size, window - 1)
 
         self.dropout = nn.Dropout(0.5)
         self.affine1 = nn.Linear(2 * self.hidden_size, 512)
@@ -73,14 +71,31 @@ class Agent:
         self.gamma = gamma
         self.window = window
         self.rewards = []
+        self.training_loss = []
+        self.portfolio_values = []
 
-    def select_action(self, state, evaluate=False):
+    def select_action(self, state, prices, evaluate=False):
         state = torch.from_numpy(state).float().unsqueeze(0)
         if evaluate:
             self.policy.eval()
+
         probs = self.policy(state)
-        m = Categorical(probs)
+        if not evaluate:
+            probs2 = probs.clone()
+            can_exec = [self.env.can_execute_action(a.value, prices) for a in Actions]
+            # print(can_exec)
+            for i in range(len(can_exec)):
+                if not can_exec[i]:
+                    probs2[0][i] = 0.
+
+            m = Categorical(probs2)
+        else:
+            m = Categorical(probs)
+
         action = m.sample()
+        # print(probs2)
+        # print('-' * 80)
+
         self.policy.saved_log_probs.append(m.log_prob(action))
         return action.item()
 
@@ -99,6 +114,7 @@ class Agent:
         self.optimizer.zero_grad()
         policy_loss = torch.cat(policy_loss).sum()
         print('LOSS:', policy_loss.item())
+        self.training_loss.append(policy_loss.item())
         policy_loss.backward()
         self.optimizer.step()
         del self.policy.rewards[:]
@@ -115,6 +131,7 @@ class Agent:
             ep_reward, state, prices = self.run_episode(ep_reward, state, prices)
             self.rewards.append(ep_reward)
             portfolio_value = prices[-1] * self.env.shares + self.env.cash
+            self.portfolio_values.append(portfolio_value)
             print(
                 'Episode {}\tLast reward: {:.6f}\tAverage reward: {:.6f}\tShares:{}\tCash:{:.2f}\tPortfolio:{:.2f}'.format(
                     i_episode, ep_reward, np.mean(self.rewards), self.env.shares, self.env.cash, portfolio_value))
@@ -126,7 +143,7 @@ class Agent:
         actions = []
 
         for t in range(len(self.env)):  # Don't infinite loop while learning
-            action = self.select_action(state)
+            action = self.select_action(state, prices)
             state, prices, reward, action = self.env.step(action, state, prices)
             actions.append(action)
             self.policy.rewards.append(reward)
@@ -148,3 +165,12 @@ class Agent:
             plt.plot(reward)
         plt.title('rewards')
         plt.show()
+
+    def save_training_loss(self):
+        np.save("training_loss.npy", np.array(self.training_loss))
+
+    def save_rewards(self):
+        np.save("training_rewards.npy", np.array(self.rewards))
+
+    def save_portfolios(self):
+        np.save("portfolios.npy", np.array(self.portfolio_values))

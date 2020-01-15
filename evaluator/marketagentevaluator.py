@@ -16,7 +16,7 @@ class MarketAgentEvaluator:
         prices = SlidingWindow(window).transform(data)
         states = np.log(prices[:, 1::]) - np.log(prices[:, :-(window - 1)])
         for price_window, state in zip(prices, states):
-            action = self.agent.select_action(state, True)
+            action = self.agent.select_action(state, prices, True)
             self._apply_action(action, price_window)
 
     def _apply_action(self, action, price_window):

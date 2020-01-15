@@ -19,15 +19,18 @@ def main():
     df = df[df.date > '2017-06-01']
     data = df['BTC-EUR'].values
     data2 = df['ETH-EUR'].values
-    window = 7
+    window = 180
 
     agent = Agent(load_existing=False, window=window, gamma=0.9)
-    agent.train(episodes=1000, num_samples=2555)
-    # agent.train(episodes=1000, num_samples=27375)
-    # agent.train(episodes=1000, num_samples=54750)
+    # agent.train(episodes=1000, num_samples=2555)
+    agent.train(episodes=1000, num_samples=27375)
+    # agent.train(episodes=10, num_samples=54750)
     # agent.train(epochs=10, episodes=100, num_samples=109500)
     # agent.train(episodes=100, num_samples=219000)
     #
+    agent.save_training_loss()
+    agent.save_rewards()
+    agent.save_portfolios()
     # agent.plot_results()
 
     agent = Agent(load_existing=True, window=window)

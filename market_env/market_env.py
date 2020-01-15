@@ -12,7 +12,6 @@ class Actions(Enum):
     HOLD = 0
     BUY = 1
     SELL = 2
-    NO_ACTION = -1
 
 
 class MarketEnv:
@@ -41,10 +40,22 @@ class MarketEnv:
         print('Env reset - shared:%d - cash: %.2f - num of data: %d' % (self.shares, self.cash, len(self.queue_prices)))
         return self.queue_states.popleft(), self.queue_prices.popleft(), 0
 
+    def can_execute_action(self, action, prices):
+
+        if action == Actions.SELL.value and self.shares > 0:
+            return True
+
+        if action == Actions.BUY.value and self.cash > prices[-1]:
+            return True
+
+        if action == Actions.HOLD.value:
+            return True
+
+        return False
+
     def step(self, action, state, price_window):
         # 0 - Hold, 1 - Buy, 2-Sell
         price = price_window[-1]
-
 
         if len(self.queue_prices) == 0:
             new_state = state
@@ -66,36 +77,22 @@ class MarketEnv:
         if action == Actions.SELL.value and self.shares > 0:
             self.cash = self.shares * price
             self.shares = 0
-        elif action == Actions.SELL.value:
-            action = Actions.NO_ACTION.value
 
         if action == Actions.BUY.value and self.cash > price:
             part = int(self.cash / price)
             self.shares = self.shares + part
             self.cash = self.cash - part * price
-        elif action == Actions.BUY.value:
-            action = Actions.NO_ACTION.value
 
         if action == Actions.HOLD.value:
             pass
 
-        if action == Actions.NO_ACTION.value:
-            return new_state, new_price_window, 0, action
-
         portfolio_value = new_price_window * self.shares + self.cash
-        # returns = (portfolio_value / self.investment) - np.ones(len(price_window))
         result = (portfolio_value / self.investment) - 1.
-        # return new_state, ((returns - returns.mean()) / (returns.std() + self.eps)).sum()
 
-        # p_last = self.samples[-1] * self.shares + self.cash
-        # result = np.power(portfolio_value[0] / portfolio_value, (1. / self.window)) - 1.
-        # print(str(portfolio_value[0])+', '+str(portfolio_value[-1]))
-        # result = np.power(portfolio_value[0] / portfolio_value[-1], (1. / self.window)) - 1.
-        # result = np.log(portfolio_value[1::]) - np.log(portfolio_value[:-1])
-        # if self.shares > 0:
-        #     print(portfolio_value, ' --> ', result)
+        result[result > 0.] = 1
+        result[result < 0.] = 0
 
-        return new_state, new_price_window, result.mean(), action
+        return new_state, new_price_window, result.sum(), action
 
     def __len__(self):
         return len(self.prices)
